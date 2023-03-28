@@ -1,0 +1,5 @@
+<!DOCTYPE RCC><RCC version ="1.0">
+<qresource>
+    <file alias="help.png">resources/216643_help_icon.png</file>
+</qresource>
+</RCC>
