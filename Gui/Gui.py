@@ -4,10 +4,18 @@ from PyQt5.QtGui import *
 import sys
 import qrc_resources
 from pyqtgraph import *
+from pylab import *
 import numpy as np
 import pyqtgraph as pg
+import matplotlib
+matplotlib.use('Qt5Agg')
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+from matplotlib.figure import Figure
 import os
+import matplotlib.pyplot as plt
+import random
 
+        
 class Window(QMainWindow):
     """Main Window."""
     def __init__(self, *args, **kwargs):
@@ -15,7 +23,8 @@ class Window(QMainWindow):
         super(Window, self).__init__(*args, **kwargs)
         self.setWindowTitle("L-Band Satellite Tracking and Characterization Interface")
         self.resize(1500,500)
-
+        self.setAcceptDrops(True)
+        self.signal_setup()
         self._createActions()
         self._createMenuBar()
         widget = QWidget()
@@ -28,6 +37,20 @@ class Window(QMainWindow):
         layout.addWidget(tabs)
         widget.setLayout(layout)
         self.setCentralWidget(widget)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.accept()
+        else:
+            event.ignore()
+    def dropEvent(self, event):
+        files = [u.toLocalFile() for u in event.mimeData().urls()]
+        for f in files:
+            if f.endswith('tle.txt'):
+                file = open(f,'r')
+                with file:
+                    text = file.read()
+                    self.queue.setPlainText(text) 
 
 
     def characterizationTabUI(self):
@@ -44,8 +67,12 @@ class Window(QMainWindow):
         self.spectrumSelect.addItems(["Select Spectrum", "Average Frequency vs. Time",
                                        "Signal Strength vs. Time"])
         
-        self.graphWidget = pg.PlotWidget()
         
+        self.figure = plt.Figure()
+        self.canvas = FigureCanvasQTAgg(self.figure)
+        self.spectrumSelect.activated.connect(self.plotSpectrum)
+    
+
         self.textbox = QLineEdit(self)
         self.textbox.setPlaceholderText("Insert TLE here")
         self.textbox.setDragEnabled(True)
@@ -66,10 +93,14 @@ class Window(QMainWindow):
         self.queueLabel = QLabel("TLE Queue:",self)
         
         self.queue = QPlainTextEdit(self)
-        self.queue.setReadOnly(True)       
+        self.queue.setReadOnly(True)   
+
+
+ 
+
 
         layout2.addWidget(self.spectrumSelect)
-        layout2.addWidget(self.graphWidget)
+        layout2.addWidget(self.canvas)
         tleinputlayout.addWidget(self.textbox)
         tleinputlayout.addWidget(self.addToQueue)
         layout2.addLayout(tleinputlayout)
@@ -87,9 +118,9 @@ class Window(QMainWindow):
         layout3.addWidget(self.queue)
         layout1.addLayout(layout3)
         self.setCentralWidget(characterizationTab)
-        time = [0, 1, 2, 3, 4, 5, 6]
-        averaged_frequency = [1400, 1450, 1500, 1550, 1600, 1650, 1700]
-        self.graphWidget.plot(time, averaged_frequency)
+
+        
+        
         characterizationTab.setLayout(layout1)
         
         return characterizationTab
@@ -112,7 +143,7 @@ class Window(QMainWindow):
         commandTab.setLayout(mainLayout)
         return commandTab 
 
-    def file_open(self):
+    def tle_file_open(self):
         name = QFileDialog.getOpenFileName(self, 'Open File')
         
         if name[0]:
@@ -121,13 +152,28 @@ class Window(QMainWindow):
                 text = f.read()
                 self.queue.setPlainText(text)
 
+    def IQ_file_open(self):
+        name = QFileDialog.getOpenFileName(self, 'Open File')
+        
+        if name[0]:
+            f = open(name[0],'r')
+            with f:
+                text = f.read()
+                self.results.setPlainText(text)       
+
     def _createMenuBar(self):
         menuBar = self.menuBar()
 
         fileMenu = QMenu("&File", self)
         menuBar.addMenu(fileMenu)
         fileMenu.addAction(self.newAction)
-        fileMenu.addAction(self.openAction)
+
+        #open menu
+        openSubMenu = QMenu("&Open", self)
+        fileMenu.addMenu(openSubMenu)
+        openSubMenu.addAction(self.openTLE)
+        openSubMenu.addAction(self.openIQ)
+
         fileMenu.addAction(self.saveAction)
         fileMenu.addAction(self.exitAction)
 
@@ -139,9 +185,13 @@ class Window(QMainWindow):
         self.newAction = QAction("&New", self)
 
         self.openAction = QAction("&Open", self)
-        self.openAction.setShortcut("Ctrl+o")
         self.openAction.setStatusTip('Open File')
-        self.openAction.triggered.connect(self.file_open)
+
+        self.openTLE=QAction("&Open TLE", self)
+        self.openTLE.triggered.connect(self.tle_file_open)
+
+        self.openIQ=QAction("&Open IQ", self)
+        self.openIQ.triggered.connect(self.IQ_file_open)   
 
         self.saveAction = QAction("&Save", self)
         
@@ -155,12 +205,30 @@ class Window(QMainWindow):
         # updated_tle = tle +'\n'
         self.queue.insertPlainText(tle + '\n')
         self.textbox.clear()
-       
+    
+    def plotSpectrum(self):
+        samples = [-0.36470588+0.78039216j, -0.09803922+0.09235294j, 0.14509804+0.01176471j, -0.14509904-0.18431373j, -0.16078431+0.05882353j, -0.1372549+0.39607843j, -0.1372549 +0.5372549j,  -0.4745098 +0.05098039j, 0.01176471+0.30196078j]
+        data = plt.psd(samples, Fs=2.048, Fc=0)
+        ax = self.figure.add_subplot(111)
+        ax.plot(data, '*-')
+        ax.set_title('Average Spectrum vs. time')
+        self.canvas.draw()
+        
+    def signal_setup(self):
+        np.random.seed(0)
+        dt = 0.01
+        Fs = 1/dt
+        t = np.arange(0, 10, dt)
+        nse = np.random.randn(len(t))
+        r = np.exp(-t/0.05)
+        cnse = np.convolve(nse, r)*dt
+        cnse = cnse[:len(t)]
 
-
+        s = 0.1*np.sin(2*np.pi*10*t) + cnse
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     win = Window()
     win.show()
     sys.exit(app.exec_())
+
