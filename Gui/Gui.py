@@ -14,6 +14,7 @@ from matplotlib.figure import Figure
 import os
 import matplotlib.pyplot as plt
 import random
+from functools import partial
 
         
 class Window(QMainWindow):
@@ -24,7 +25,6 @@ class Window(QMainWindow):
         self.setWindowTitle("L-Band Satellite Tracking and Characterization Interface")
         self.resize(1500,500)
         self.setAcceptDrops(True)
-        self.signal_setup()
         self._createActions()
         self._createMenuBar()
         widget = QWidget()
@@ -37,21 +37,109 @@ class Window(QMainWindow):
         layout.addWidget(tabs)
         widget.setLayout(layout)
         self.setCentralWidget(widget)
-
-    def dragEnterEvent(self, event):
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        # Check if the drag-and-drop operation contains a text file named 'tle.txt'
         if event.mimeData().hasUrls():
-            event.accept()
-        else:
-            event.ignore()
-    def dropEvent(self, event):
-        files = [u.toLocalFile() for u in event.mimeData().urls()]
-        for f in files:
-            if f.endswith('tle.txt'):
-                file = open(f,'r')
-                with file:
-                    text = file.read()
-                    self.queue.setPlainText(text) 
+            for url in event.mimeData().urls():
+                if url.isLocalFile() and url.fileName() == 'tle.txt':
+                    event.accept()
+                    return
 
+        event.ignore()
+
+    def dropEvent(self, event: QDropEvent):
+        # Check if the dropped file is a text file named 'tle.txt'
+        for url in event.mimeData().urls():
+            if url.isLocalFile() and url.fileName() == 'tle.txt':
+                filepath = url.toLocalFile()
+                with open(filepath, 'r') as f:
+                    file_content = f.read()
+                msgBox = QMessageBox()
+                msgBox.setText("Would you like to add this file to the queue or replace the queue?")
+                msgBox.setWindowTitle("Options")
+                msgBox.addButton("Add to queue", QMessageBox.YesRole)
+                msgBox.addButton("Replace queue", QMessageBox.NoRole)
+                msgBox.addButton("Cancel", QMessageBox.RejectRole)
+                choice = msgBox.exec()
+                if choice == QMessageBox.YesRole:
+                    # Add the file content to the QPlainTextEdit without replacing the text
+                    self.queue.insertPlainText(file_content)
+                elif choice == QMessageBox.NoRole:
+                    # Replace the content of the QPlainTextEdit with the file content
+                    self.queue.clear()
+                    self.queue.insertPlainText(file_content)
+
+                event.accept()
+                return
+
+        event.ignore()
+
+
+    # def dragEnterEvent(self, event):
+    #     if event.mimeData().hasUrls():
+    #         event.accept()
+    #     else:
+    #         event.ignore()
+    # def dropEvent(self, event):
+    #     if event.mimeData().hasUrls():
+    #         event.accept()
+
+    #         # get the list of file URLs
+    #         urls = event.mimeData().urls()
+
+    #         # create a pop-up dialog with options
+    #         dialog = QDialog(self)
+    #         dialog.setWindowTitle("Options")
+    #         message = QLabel("Would you like to add this file to the queue or replace the queue?")
+    #         add_button = QPushButton("Add to queue")
+    #         replace_button = QPushButton("Replace queue")
+    #         cancel_button = QPushButton("Cancel")
+    #         add_button.setProperty('urls', urls)
+    #         replace_button.setProperty('urls', urls)
+    #         button_layout = QHBoxLayout()
+    #         button_layout.addWidget(add_button)
+    #         button_layout.addWidget(replace_button)
+    #         button_layout.addWidget(cancel_button)
+    #         main_layout = QVBoxLayout()
+    #         main_layout.addWidget(message)
+    #         main_layout.addLayout(button_layout)
+    #         dialog.setLayout(main_layout)
+
+    #         # connect the buttons to their respective functions
+    #         print(type(add_button))  # should output <class 'PyQt5.QtWidgets.QPushButton'>
+    #         add_button.clicked.connect(self.addToQueue)
+    #         replace_button.clicked.connect(self.replaceQueue)
+    #         cancel_button.clicked.connect(dialog.close)
+
+    #         # show the pop-up dialog
+    #         dialog.exec_()
+    #     else:
+    #         event.ignore()
+
+    # def addToQueue(self):
+    #     urls = self.sender().property('urls')
+    #     for url in urls:
+    #         file_path = url.toLocalFile()
+    #         with open(file_path, 'r') as f:
+    #             tle = f.read()
+    #             self.queue.appendPlainText(tle)
+
+    # def addToQueue(self,urls):
+    #     for url in urls:
+    #         file_path=url.toLocalFile()
+    #         with open(file_path, 'r') as f:
+    #             tle = f.read()
+    #             self.queue.appendPlainText(tle)
+    # def addToQueue(self, urls):
+    #     for url in urls:
+    #         url = QUrl(url.toLocalFile())
+    #         # add the file to the queue
+
+    def replaceQueue(self, urls):
+        # clear the current queue
+        for url in urls:
+            url = QUrl(url.toLocalFile())
+            # add the file to the queue
 
     def characterizationTabUI(self):
         characterizationTab = QWidget()
@@ -70,7 +158,7 @@ class Window(QMainWindow):
         
         self.figure = plt.Figure()
         self.canvas = FigureCanvasQTAgg(self.figure)
-        self.spectrumSelect.activated.connect(self.plotSpectrum)
+        self.spectrumSelect.activated.connect(self.plotAvgSpectrum)
     
 
         self.textbox = QLineEdit(self)
@@ -205,26 +293,28 @@ class Window(QMainWindow):
         # updated_tle = tle +'\n'
         self.queue.insertPlainText(tle + '\n')
         self.textbox.clear()
-    
-    def plotSpectrum(self):
-        samples = [-0.36470588+0.78039216j, -0.09803922+0.09235294j, 0.14509804+0.01176471j, -0.14509904-0.18431373j, -0.16078431+0.05882353j, -0.1372549+0.39607843j, -0.1372549 +0.5372549j,  -0.4745098 +0.05098039j, 0.01176471+0.30196078j]
-        data = plt.psd(samples, Fs=2.048, Fc=0)
-        ax = self.figure.add_subplot(111)
-        ax.plot(data, '*-')
-        ax.set_title('Average Spectrum vs. time')
-        self.canvas.draw()
         
-    def signal_setup(self):
-        np.random.seed(0)
+    def plotAvgSpectrum(self):
         dt = 0.01
-        Fs = 1/dt
-        t = np.arange(0, 10, dt)
-        nse = np.random.randn(len(t))
-        r = np.exp(-t/0.05)
-        cnse = np.convolve(nse, r)*dt
-        cnse = cnse[:len(t)]
+        t = np.arange(0, 30, dt)
+        nse1 = np.random.randn(len(t))
+        r = np.exp(-t / 0.05)
 
-        s = 0.1*np.sin(2*np.pi*10*t) + cnse
+        cnse1 = np.convolve(nse1, r, mode ='same')*dt
+
+        s1 = np.cos(np.pi * t) + cnse1 + np.sin(2 * np.pi * 10 * t)
+
+        # create the spectrum plot using matplotlib's psd function
+        ax = self.figure.add_subplot(111)
+        ax.psd(s1, 2**14, dt)
+        ax.set_ylabel('PSD(db)')
+        ax.set_xlabel('Frequency')
+        ax.set_title('matplotlib.pyplot.psd() Example\n', fontsize = 14, fontweight ='bold')
+
+        # refresh the canvas to display the plot
+        self.canvas.draw()
+    
+        
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
