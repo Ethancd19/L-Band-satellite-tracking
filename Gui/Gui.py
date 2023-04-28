@@ -15,6 +15,7 @@ import os
 import matplotlib.pyplot as plt
 import random
 from functools import partial
+import pickle
 
         
 class Window(QMainWindow):
@@ -23,7 +24,7 @@ class Window(QMainWindow):
         """Initializer."""
         super(Window, self).__init__(*args, **kwargs)
         self.setWindowTitle("L-Band Satellite Tracking and Characterization Interface")
-        self.resize(1500,500)
+        self.resize(2000,800)
         self.setAcceptDrops(True)
         self._createActions()
         self._createMenuBar()
@@ -172,20 +173,21 @@ class Window(QMainWindow):
         self.satelliteProgress = QProgressBar(self)
         self.power = QPushButton("power",self)
         self.tracking = QCheckBox("Tracking?",self)
-        self.download = QLabel("Download:",self)
-        self.delete = QLabel("Delete:",self)
-        self.downloadOption = QComboBox()
-        self.downloadOption.addItems(["Select Trace","Trace 1","Trace 2","Trace 3","Trace 4","Trace 5"])
-        self.deleteOption = QComboBox()
-        self.deleteOption.addItems(["Select Trace","Trace 1","Trace 2","Trace 3","Trace 4","Trace 5"])
+        self.hostClientSelect = QComboBox()
+        self.hostClientSelect.addItems(["Select Device","Host","Client"])
+        self.selectTrace = QComboBox()
+        self.selectTrace.addItems(["Select Trace","Trace 1","Trace 2","Trace 3","Trace 4","Trace 5"])
+        self.download = QPushButton("Download",self)
+        self.delete = QPushButton("Delete",self)
+        self.plot= QPushButton("Plot",self)
+        # self.downloadOption = QComboBox()
+        # self.downloadOption.addItems(["Select Trace","Trace 1","Trace 2","Trace 3","Trace 4","Trace 5"])
+        # self.deleteOption = QComboBox()
+        # self.deleteOption.addItems(["Select Trace","Trace 1","Trace 2","Trace 3","Trace 4","Trace 5"])
         self.queueLabel = QLabel("TLE Queue:",self)
         
         self.queue = QPlainTextEdit(self)
         self.queue.setReadOnly(True)   
-
-
- 
-
 
         layout2.addWidget(self.spectrumSelect)
         layout2.addWidget(self.canvas)
@@ -196,12 +198,15 @@ class Window(QMainWindow):
         layout1.addLayout(layout2)
         layout3.addWidget(self.power)
         layout3.addWidget(self.tracking)
+        layout3.addWidget(self.hostClientSelect)
+        layout3.addWidget(self.selectTrace)
         layout4.addWidget(self.download)
         layout4.addWidget(self.delete)
+        layout4.addWidget(self.plot)
         layout3.addLayout(layout4)
-        layout5.addWidget(self.downloadOption)
-        layout5.addWidget(self.deleteOption)
-        layout3.addLayout(layout5)
+        # layout5.addWidget(self.downloadOption)
+        # layout5.addWidget(self.deleteOption)
+        # layout3.addLayout(layout5)
         layout3.addWidget(self.queueLabel)
         layout3.addWidget(self.queue)
         layout1.addLayout(layout3)
@@ -237,9 +242,17 @@ class Window(QMainWindow):
         if name[0]:
             f = open(name[0],'r')
             with f:
-                text = f.read()
-                self.queue.setPlainText(text)
+                lines = f.readlines()
 
+            # remove first line
+            lines.pop(0)
+
+            # remove every third line
+            lines = [line for index, line in enumerate(lines) if (index + 1) % 3 != 0]
+
+# join remaining lines into a single string
+            text = "".join(lines)
+            self.queue.setPlainText(text)
     def IQ_file_open(self):
         name = QFileDialog.getOpenFileName(self, 'Open File')
         
@@ -295,21 +308,59 @@ class Window(QMainWindow):
         self.textbox.clear()
         
     def plotAvgSpectrum(self):
-        dt = 0.01
-        t = np.arange(0, 30, dt)
-        nse1 = np.random.randn(len(t))
-        r = np.exp(-t / 0.05)
+        # dt = 0.01
+        # t = np.arange(0, 30, dt)
+        # nse1 = np.random.randn(len(t))
+        # r = np.exp(-t / 0.05)
 
-        cnse1 = np.convolve(nse1, r, mode ='same')*dt
+        # cnse1 = np.convolve(nse1, r, mode ='same')*dt
 
-        s1 = np.cos(np.pi * t) + cnse1 + np.sin(2 * np.pi * 10 * t)
+        # s1 = np.cos(np.pi * t) + cnse1 + np.sin(2 * np.pi * 10 * t)
+        with open(r"C:\Users\Ethan\Documents\MDE\L-Band-satellite-tracking\Gui\test_data.dat", 'rb') as f:
+            data_dict = pickle.load(f)
+
+        raw_iq_data = data_dict['raw_iq_data']
+        center_frequency = data_dict['center_frequency']
+        sample_rate = data_dict['sample_rate']
+
+        # Compute the FFT and normalize
+        iq_fft = np.fft.fftshift(np.fft.fft(raw_iq_data))
+        iq_fft_norm = np.abs(iq_fft) / np.max(np.abs(iq_fft))
+
+        # Compute the frequency axis
+        freqs = np.fft.fftshift(np.fft.fftfreq(len(raw_iq_data), 1 / sample_rate)) + center_frequency
+
+        # Compute the time axis
+        time_steps = np.arange(len(raw_iq_data)) / sample_rate
+
+        # Reshape the FFT data into chunks of 100 samples (adjust as needed)
+        fft_chunk_size = 100
+        num_chunks = len(raw_iq_data) // fft_chunk_size
+        fft_data = iq_fft_norm[:num_chunks*fft_chunk_size].reshape(num_chunks, fft_chunk_size)
+        time_data = time_steps[:num_chunks*fft_chunk_size].reshape(num_chunks, fft_chunk_size)
+
+        # Compute the average spectrum vs time
+        avg_spectrum = np.mean(fft_data, axis=1)
+        avg_time = np.mean(time_data, axis=1)
+
+        # Plot the average spectrum vs time
+        ax = self.figure.add_subplot(111)
+        ax.plot(avg_time, avg_spectrum)
+        ax.set_xlabel('Time (s)')
+        ax.set_ylabel('Average Spectrum')
+        ax.set_title('Average Spectrum vs Time')
+        # ax = self.figure.add_subplot(111)
+        # ax.psd(raw_iq_data, NFFT=1024, Fs=sample_rate, window=np.hamming(1024))
+        # ax.set_xlabel('Frequency (Hz)')
+        # ax.set_ylabel('PSD (dB/Hz)')
+        # ax.set_title('Power Spectral Density')
 
         # create the spectrum plot using matplotlib's psd function
-        ax = self.figure.add_subplot(111)
-        ax.psd(s1, 2**14, dt)
-        ax.set_ylabel('PSD(db)')
-        ax.set_xlabel('Frequency')
-        ax.set_title('matplotlib.pyplot.psd() Example\n', fontsize = 14, fontweight ='bold')
+        
+        # ax.psd(s1, 2**14, dt)
+        # ax.set_ylabel('Power(db)')
+        # ax.set_xlabel('Frequency (Hz)')
+        # ax.set_title('Average Spectrum VS. Time\n', fontsize = 14, fontweight ='bold')
 
         # refresh the canvas to display the plot
         self.canvas.draw()
