@@ -28,6 +28,8 @@ class Window(QMainWindow):
         self.setAcceptDrops(True)
         self._createActions()
         self._createMenuBar()
+        self.timer = QTimer(self)
+        self.elapsed_time = 0
         widget = QWidget()
 
         layout = QVBoxLayout()
@@ -150,12 +152,11 @@ class Window(QMainWindow):
         tleinputlayout = QHBoxLayout()
         layout3 = QVBoxLayout()
         layout4 = QHBoxLayout()
-        layout5 = QHBoxLayout()
+        trackSatelliteLayout = QVBoxLayout()
 
         self.spectrumSelect = QComboBox()
         self.spectrumSelect.addItems(["Select Spectrum", "Average Frequency vs. Time",
                                        "Signal Strength vs. Time"])
-        
         
         self.figure = plt.Figure()
         self.canvas = FigureCanvasQTAgg(self.figure)
@@ -184,10 +185,19 @@ class Window(QMainWindow):
         # self.downloadOption.addItems(["Select Trace","Trace 1","Trace 2","Trace 3","Trace 4","Trace 5"])
         # self.deleteOption = QComboBox()
         # self.deleteOption.addItems(["Select Trace","Trace 1","Trace 2","Trace 3","Trace 4","Trace 5"])
+        self.track_satellite = QWidget()
         self.queueLabel = QLabel("TLE Queue:",self)
         
         self.queue = QPlainTextEdit(self)
-        self.queue.setReadOnly(True)   
+        self.queue.setReadOnly(True)
+        self.fixed_az_el_widget = QWidget()
+        self.fixed_az_el_layout = QFormLayout()
+        self.azimuth_edit = QLineEdit()
+        self.elevation_edit = QLineEdit()
+        self.length_of_recording_edit = QLineEdit()
+        self.point_button = QPushButton("Point")
+        self.start_recording_button = QPushButton("Start Recording")
+           
 
         layout2.addWidget(self.spectrumSelect)
         layout2.addWidget(self.canvas)
@@ -207,8 +217,25 @@ class Window(QMainWindow):
         # layout5.addWidget(self.downloadOption)
         # layout5.addWidget(self.deleteOption)
         # layout3.addLayout(layout5)
-        layout3.addWidget(self.queueLabel)
-        layout3.addWidget(self.queue)
+        self.tab_widget = QTabWidget()
+        trackSatelliteLayout.addWidget(self.queueLabel)
+        trackSatelliteLayout.addWidget(self.queue)
+        self.track_satellite.setLayout(trackSatelliteLayout)
+        self.tab_widget.addTab(self.track_satellite,"Track Satellites")
+        self.fixed_az_el_layout.addRow("Enter Azimuth:",self.azimuth_edit)
+        self.fixed_az_el_layout.addRow("Enter Elevation:",self.elevation_edit)
+        self.fixed_az_el_layout.addRow("Length of Recording:",self.length_of_recording_edit)
+        self.fixed_az_el_layout.addRow(self.point_button, self.start_recording_button)
+        self.start_recording_button.clicked.connect(self.start_timer)
+        
+        self.timer_label = QLabel("Time Elapsed: 0 s")
+        self.fixed_az_el_layout.addRow(self.timer_label)
+
+        self.fixed_az_el_widget.setLayout(self.fixed_az_el_layout)
+        self.tab_widget.addTab(self.fixed_az_el_widget, "Fixed AZ-EL")
+
+        layout3.addWidget(self.tab_widget)
+        
         layout1.addLayout(layout3)
         self.setCentralWidget(characterizationTab)
 
@@ -217,6 +244,13 @@ class Window(QMainWindow):
         characterizationTab.setLayout(layout1)
         
         return characterizationTab
+    def start_timer(self):
+        self.elapsed_time = 0
+        self.timer.start(1000)
+        self.timer.timeout.connect(self.update_timer)
+    def update_timer(self):
+        self.elapsed_time += 1
+        self.timer_label.setText(f"Time Elapsed: {self.elapsed_time} s")
 
     def commandTabUI(self):
         commandTab = QWidget()
