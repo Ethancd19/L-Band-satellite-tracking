@@ -1,6 +1,7 @@
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
+from PyQt5.QtWebEngineWidgets import QWebEngineView
 import sys
 import qrc_resources
 from pyqtgraph import *
@@ -16,6 +17,9 @@ import matplotlib.pyplot as plt
 import random
 from functools import partial
 import pickle
+import io
+import folium
+
 
         
 class Window(QMainWindow):
@@ -23,6 +27,9 @@ class Window(QMainWindow):
     def __init__(self, *args, **kwargs):
         """Initializer."""
         super(Window, self).__init__(*args, **kwargs)
+
+        #Initializes the window that the layouts defined below are going to be placed in. Giving things such as the window size
+        #And other characteristics such as wether or not it accepts drag and drop files
         self.setWindowTitle("L-Band Satellite Tracking and Characterization Interface")
         self.resize(2000,800)
         self.setAcceptDrops(True)
@@ -34,20 +41,28 @@ class Window(QMainWindow):
 
         layout = QVBoxLayout()
         
-        tabs = QTabWidget()
-        tabs.addTab(self.characterizationTabUI(), "Characterization")
-        tabs.addTab(self.commandTabUI(), "Command Center")
-        layout.addWidget(tabs)
+        
+        #creating the tabs that will be used in the GUI that will allow us to switch between the 
+        #characterization tab and the command tab
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self.calibrationTabUI(), "Calibration")
+        self.tabs.addTab(self.characterizationTabUI(), "Characterization")
+        self.tabs.addTab(self.commandTabUI(), "Command Center")
+        layout.addWidget(self.tabs)
+        self.tabs.currentChanged.connect(self._tabChanged)
         widget.setLayout(layout)
         self.setCentralWidget(widget)
+
     def dragEnterEvent(self, event: QDragEnterEvent):
+        #Function that allows the user to drag and drop a file into the queue instead of manually adding it or
+        #having to search for the file using the file browser
         # Check if the drag-and-drop operation contains a text file named 'tle.txt'
         if event.mimeData().hasUrls():
             for url in event.mimeData().urls():
                 if url.isLocalFile() and url.fileName() == 'tle.txt':
                     event.accept()
                     return
-
+        #if after checking the file, it is not a text file named 'tle.txt', then ignore the event
         event.ignore()
 
     def dropEvent(self, event: QDropEvent):
@@ -143,7 +158,68 @@ class Window(QMainWindow):
         for url in urls:
             url = QUrl(url.toLocalFile())
             # add the file to the queue
+    def calibrationTabUI(self):
+        calibrationTab = QWidget()
+        mainLayout = QHBoxLayout()
 
+        coordinate = (37.229572, -80.413940)
+        m = folium.Map(
+            title="Location",
+            zoom_start=18,
+            location=coordinate
+        )
+        folium.Marker(coordinate, popup="Virginia Tech").add_to(m)
+
+        data = io.BytesIO()
+        m.save(data, close_file=False)
+
+        # Map (QWebEngineView) Configuration
+        webView = QWebEngineView()
+        webView.setHtml(data.getvalue().decode())
+        webView.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)  # Set size policy for webView
+        mainLayout.addWidget(webView, 2)  # give more stretch to the map
+
+        # Info Panel Configuration
+        infoLayout = QVBoxLayout()
+        coordsLabel = QLabel(f"Coordinates: {coordinate}")
+        headingLabel = QLabel("Heading: 0")
+        self.progressBar = QProgressBar()
+        self.progressBar.setMaximum(60)
+        self.calibrationButton = QPushButton("Start Calibration")
+
+        self.calibrationTimer = QTimer()
+        self.calibrationTimer.timeout.connect(self.updateProgressBar)
+        self.calibrationButton.clicked.connect(self.toggleCalibration)
+        infoLayout.addWidget(coordsLabel)
+        infoLayout.addWidget(headingLabel)
+        infoLayout.addWidget(self.progressBar)
+        infoLayout.addWidget(self.calibrationButton)
+
+        infoLayoutWidget = QWidget()  # wrap the infoLayout in a widget
+        infoLayoutWidget.setLayout(infoLayout)
+        infoLayoutWidget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)  # Set size policy for info panel
+
+        mainLayout.addWidget(infoLayoutWidget, 2)  # give less stretch to the info panel
+
+        calibrationTab.setLayout(mainLayout)
+        return calibrationTab
+
+    
+    def toggleCalibration(self):
+        if self.calibrationButton.text() == "Start Calibration":
+            self.progressBar.setValue(0)
+            self.calibrationTimer.start(1000)
+            self.calibrationButton.setText("Stop Calibration")
+        else:
+            self.calibrationTimer.stop()
+            self.calibrationButton.setText("Start Calibration")
+    def updateProgressBar(self):
+        value = self.progressBar.value()
+        if value < 60:
+            self.progressBar.setValue(value + 1)
+        else:
+            self.calibrationTimer.stop()
+            self.calibrationButton.setText("Start Calibration")
     def characterizationTabUI(self):
         characterizationTab = QWidget()
 
@@ -198,7 +274,7 @@ class Window(QMainWindow):
         self.point_button = QPushButton("Point")
         self.start_recording_button = QPushButton("Start Recording")
            
-
+        #developing the layout of the characterization tab, making it more user friendly and understandable
         layout2.addWidget(self.spectrumSelect)
         layout2.addWidget(self.canvas)
         tleinputlayout.addWidget(self.textbox)
@@ -217,6 +293,8 @@ class Window(QMainWindow):
         # layout5.addWidget(self.downloadOption)
         # layout5.addWidget(self.deleteOption)
         # layout3.addLayout(layout5)
+
+        #setting what each of thre subsections of the layout is doing
         self.tab_widget = QTabWidget()
         trackSatelliteLayout.addWidget(self.queueLabel)
         trackSatelliteLayout.addWidget(self.queue)
@@ -269,6 +347,31 @@ class Window(QMainWindow):
         mainLayout.addLayout(bottomLayout)
         commandTab.setLayout(mainLayout)
         return commandTab 
+
+    def _tabChanged(self, index):
+        #if moving away from Calibration tab
+        if index != 0:
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Calibration Check")
+            msg.setText("Have you completed the calibration?")
+            yes_button = msg.addButton("Yes", QMessageBox.YesRole)
+            no_button = msg.addButton("No", QMessageBox.NoRole)
+            just_looking_button = msg.addButton("Just looking", QMessageBox.NoRole)
+
+            msg.exec_()
+
+            clicked_button = msg.clickedButton()
+
+            if clicked_button == no_button:
+                # prevent the user from moving to the next tab
+                self.tabs.setCurrentIndex(0)
+            elif clicked_button == just_looking_button:
+                warning_msg = QMessageBox.warning(self,
+                                                  "Warning",
+                                                  "Proceeding without calibration will result in errors in readings.",
+                                                  QMessageBox.Ok | QMessageBox.Cancel)
+                if warning_msg == QMessageBox.Cancel:
+                    self.tabs.setCurrentIndex(0)
 
     def tle_file_open(self):
         name = QFileDialog.getOpenFileName(self, 'Open File')
