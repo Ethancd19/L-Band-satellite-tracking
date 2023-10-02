@@ -181,8 +181,38 @@ class Window(QMainWindow):
 
         # Info Panel Configuration
         infoLayout = QVBoxLayout()
+
         coordsLabel = QLabel(f"Coordinates: {coordinate}")
+        infoLayout.addWidget(coordsLabel)
         headingLabel = QLabel("Heading: 0")
+        infoLayout.addWidget(headingLabel)
+
+        # Center Frequency
+        centerFreqLabel = QLabel("Center Frequency:")
+        self.centerFreqLineEdit = QLineEdit()  # Create a line edit for center frequency
+        infoLayout.addWidget(centerFreqLabel)
+        infoLayout.addWidget(self.centerFreqLineEdit)
+
+        
+        # Sample Rate
+        sampleRateLabel = QLabel("Sample Rate:")
+        self.sampleRateLineEdit = QLineEdit()  # Create a line edit for sample rate
+        infoLayout.addWidget(sampleRateLabel)
+        infoLayout.addWidget(self.sampleRateLineEdit)
+
+        # Test1
+        test1Label = QLabel("Test1:")
+        self.test1LineEdit = QLineEdit()  # Create a line edit for test1
+        infoLayout.addWidget(test1Label)
+        infoLayout.addWidget(self.test1LineEdit)
+
+        # Test2
+        test2Label = QLabel("Test2:")
+        self.test2LineEdit = QLineEdit()  # Create a line edit for test2
+        infoLayout.addWidget(test2Label)
+        infoLayout.addWidget(self.test2LineEdit)
+
+        
         self.progressBar = QProgressBar()
         self.progressBar.setMaximum(60)
         self.calibrationButton = QPushButton("Start Calibration")
@@ -190,8 +220,6 @@ class Window(QMainWindow):
         self.calibrationTimer = QTimer()
         self.calibrationTimer.timeout.connect(self.updateProgressBar)
         self.calibrationButton.clicked.connect(self.toggleCalibration)
-        infoLayout.addWidget(coordsLabel)
-        infoLayout.addWidget(headingLabel)
         infoLayout.addWidget(self.progressBar)
         infoLayout.addWidget(self.calibrationButton)
 
@@ -273,6 +301,13 @@ class Window(QMainWindow):
         self.length_of_recording_edit = QLineEdit()
         self.point_button = QPushButton("Point")
         self.start_recording_button = QPushButton("Start Recording")
+
+        self.graphing_settings_widget = QWidget()
+        self.graphing_settings_layout = QFormLayout()
+        self.center_frequency = QLineEdit()
+        self.test_line_edit = QLineEdit()
+        self.test_line_edit_2 = QLineEdit()
+        self.update_graph_button = QPushButton("Update Graph")
            
         #developing the layout of the characterization tab, making it more user friendly and understandable
         layout2.addWidget(self.spectrumSelect)
@@ -311,6 +346,14 @@ class Window(QMainWindow):
 
         self.fixed_az_el_widget.setLayout(self.fixed_az_el_layout)
         self.tab_widget.addTab(self.fixed_az_el_widget, "Fixed AZ-EL")
+
+        self.graphing_settings_layout.addRow("Center Frequency:", self.center_frequency)
+        self.graphing_settings_layout.addRow("Test Line Edit:", self.test_line_edit)
+        self.graphing_settings_layout.addRow("Test Line Edit 2:", self.test_line_edit_2)
+        self.graphing_settings_layout.addRow(self.update_graph_button)
+        self.graphing_settings_widget.setLayout(self.graphing_settings_layout)
+
+        self.tab_widget.addTab(self.graphing_settings_widget, "Graphing Settings")
 
         layout3.addWidget(self.tab_widget)
         
@@ -387,7 +430,7 @@ class Window(QMainWindow):
             # remove every third line
             lines = [line for index, line in enumerate(lines) if (index + 1) % 3 != 0]
 
-# join remaining lines into a single string
+            # join remaining lines into a single string
             text = "".join(lines)
             self.queue.setPlainText(text)
     def IQ_file_open(self):
