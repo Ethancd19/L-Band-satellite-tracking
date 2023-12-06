@@ -1,7 +1,7 @@
 # L-Band Satellite Tracking
 
 ## Introduction
-This project is part of the ECE 4805 Major Design Experience, focusing on L-Band satellite tracking. It includes a Python-based GUI for effective tracking and data visualization.
+Made for the L-Band Satellite Tracking and Characterization System project as part of Virginia Techs Major Design Experience (MDE) 4805/4806. This repository includes a Python-based GUI front-end used for effective tracking and data visualization.
 
 ## Running the Application
 - **Pre-compiled Application:** Users can run the application directly from the executable in the root directory.
